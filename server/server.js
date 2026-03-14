@@ -105,6 +105,11 @@ function handleMessage(ws, msg) {
       forwardToPeer(ws, msg);
       break;
 
+    // Keepalive ping
+    case 'ping':
+      send(ws, { type: 'pong' });
+      break;
+
     default:
       console.log('[Server] Unknown message type:', msg.type);
   }

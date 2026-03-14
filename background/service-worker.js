@@ -1,5 +1,7 @@
 // WatchParty — Background Service Worker
 // Manages WebSocket connection to signaling server and relays messages
+// NOTE: MV3 service workers get suspended after ~30s of inactivity.
+// We must reconnect on every wake-up and ensure messages aren't lost.
 
 // ===== Inlined constants (importScripts not supported in MV3 service workers) =====
 const MSG = {
@@ -41,9 +43,29 @@ let isConnected = false;
 let currentRoom = null;
 let userId = null;
 let participants = [];
-let reconnectTimer = null;
 let syncActive = false;
 let activeTabId = null;
+let pendingMessages = []; // Queue messages while connecting
+
+// ===== Keep service worker alive with alarms =====
+chrome.alarms.create('keepAlive', { periodInMinutes: 0.4 }); // Every 24 seconds
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'keepAlive') {
+    // Ping the WebSocket to keep connection alive
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'ping' }));
+    } else if (currentRoom) {
+      // We have an active room but lost connection — reconnect
+      connectToServer().then(() => {
+        // Re-join the room if we were in one
+        if (currentRoom && userId) {
+          sendToServer({ type: MSG.JOIN_ROOM, userId, roomCode: currentRoom });
+        }
+      });
+    }
+  }
+});
 
 // ===== Generate a unique user ID =====
 function getOrCreateUserId() {
@@ -60,6 +82,33 @@ function getOrCreateUserId() {
   });
 }
 
+// ===== Persist room state so it survives worker restarts =====
+function saveState() {
+  chrome.storage.local.set({
+    watchparty_room: currentRoom,
+    watchparty_sync: syncActive,
+    watchparty_tab: activeTabId,
+  });
+}
+
+function loadState() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['watchparty_room', 'watchparty_sync', 'watchparty_tab'], (data) => {
+      if (data.watchparty_room) currentRoom = data.watchparty_room;
+      if (data.watchparty_sync) syncActive = data.watchparty_sync;
+      if (data.watchparty_tab) activeTabId = data.watchparty_tab;
+      resolve();
+    });
+  });
+}
+
+function clearState() {
+  currentRoom = null;
+  participants = [];
+  syncActive = false;
+  chrome.storage.local.remove(['watchparty_room', 'watchparty_sync', 'watchparty_tab']);
+}
+
 // ===== WebSocket Connection =====
 
 async function connectToServer() {
@@ -67,39 +116,38 @@ async function connectToServer() {
 
   // Already connected
   if (ws && ws.readyState === WebSocket.OPEN) {
-    return Promise.resolve();
+    return;
   }
 
-  // Connection in progress — wait for it
-  if (ws && ws.readyState === WebSocket.CONNECTING) {
-    return new Promise((resolve) => {
-      const checkInterval = setInterval(() => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          clearInterval(checkInterval);
-          resolve();
-        } else if (!ws || ws.readyState === WebSocket.CLOSED) {
-          clearInterval(checkInterval);
-          resolve(); // Don't block forever
-        }
-      }, 100);
-    });
+  // Close any dead connections
+  if (ws) {
+    try { ws.close(); } catch (e) {}
+    ws = null;
   }
 
   return new Promise((resolve) => {
     try {
+      console.log('[WatchParty] Connecting to', CONFIG.SERVER_URL);
       ws = new WebSocket(CONFIG.SERVER_URL);
 
       ws.onopen = () => {
         console.log('[WatchParty] Connected to signaling server');
         isConnected = true;
-        clearTimeout(reconnectTimer);
         broadcastState();
+
+        // Flush any pending messages
+        while (pendingMessages.length > 0) {
+          const msg = pendingMessages.shift();
+          sendToServer(msg);
+        }
+
         resolve();
       };
 
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
+          if (msg.type === 'pong') return; // Ignore pong
           handleServerMessage(msg);
         } catch (e) {
           console.error('[WatchParty] Failed to parse message:', e);
@@ -111,7 +159,6 @@ async function connectToServer() {
         isConnected = false;
         ws = null;
         broadcastState();
-        scheduleReconnect();
       };
 
       ws.onerror = (err) => {
@@ -119,27 +166,31 @@ async function connectToServer() {
         isConnected = false;
         ws = null;
         broadcastState();
-        resolve(); // Resolve so we don't hang
+        resolve(); // Don't hang
       };
+
+      // Timeout if connection takes too long
+      setTimeout(() => {
+        if (ws && ws.readyState === WebSocket.CONNECTING) {
+          console.log('[WatchParty] Connection timeout');
+          ws.close();
+          ws = null;
+          resolve();
+        }
+      }, 5000);
     } catch (e) {
       console.error('[WatchParty] Failed to connect:', e);
-      scheduleReconnect();
       resolve();
     }
   });
 }
 
-function scheduleReconnect() {
-  clearTimeout(reconnectTimer);
-  reconnectTimer = setTimeout(() => {
-    console.log('[WatchParty] Attempting reconnect...');
-    connectToServer();
-  }, 3000);
-}
-
 function sendToServer(msg) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(msg));
+  } else {
+    console.log('[WatchParty] WebSocket not open, queueing message');
+    pendingMessages.push(msg);
   }
 }
 
@@ -150,12 +201,14 @@ function handleServerMessage(msg) {
     case MSG.ROOM_CREATED:
       currentRoom = msg.roomCode;
       participants = msg.participants || [userId];
+      saveState();
       broadcastToPopup({ type: MSG.ROOM_CREATED, roomCode: currentRoom, userId, participants });
       break;
 
     case MSG.ROOM_JOINED:
       currentRoom = msg.roomCode;
       participants = msg.participants || [];
+      saveState();
       broadcastToPopup({ type: MSG.ROOM_JOINED, roomCode: currentRoom, userId, participants });
       break;
 
@@ -168,7 +221,6 @@ function handleServerMessage(msg) {
         participants.push(msg.userId);
       }
       broadcastToPopup({ type: MSG.PARTICIPANT_JOINED, userId: msg.userId });
-      // Forward to content script for WebRTC
       sendToContentScript({ type: MSG.PARTICIPANT_JOINED, userId: msg.userId });
       break;
 
@@ -206,8 +258,14 @@ function handleServerMessage(msg) {
 // ===== Handle messages from popup & content scripts =====
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Track which tab sent the message (content script)
+  if (sender.tab) {
+    activeTabId = sender.tab.id;
+  }
+
   switch (message.type) {
     case MSG.GET_STATE:
+      // Respond immediately with current state
       sendResponse({
         type: MSG.STATE_UPDATE,
         connected: isConnected,
@@ -216,8 +274,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         participants: participants,
         syncing: syncActive,
       });
-      // Also send asynchronously for popup
-      broadcastState();
+
+      // Also try to connect/reconnect
+      connectToServer().then(() => broadcastState());
       break;
 
     case MSG.CREATE_ROOM:
@@ -234,17 +293,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case MSG.LEAVE_ROOM:
       sendToServer({ type: MSG.LEAVE_ROOM, userId, roomCode: currentRoom });
-      currentRoom = null;
-      participants = [];
-      syncActive = false;
+      clearState();
       break;
 
     case MSG.START_SYNC:
       syncActive = true;
-      // Find the active tab with OTT content
+      saveState();
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         if (tabs[0]) {
           activeTabId = tabs[0].id;
+          saveState();
           sendToContentScript({ type: MSG.START_SYNC, roomCode: currentRoom, userId });
         }
       });
@@ -252,6 +310,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case MSG.STOP_SYNC:
       syncActive = false;
+      saveState();
       sendToContentScript({ type: MSG.STOP_SYNC });
       break;
 
@@ -262,7 +321,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case MSG.SYNC_RATE:
     case MSG.SYNC_STATE:
       if (syncActive && currentRoom) {
-        sendToServer({ ...message, userId, roomCode: currentRoom });
+        // Ensure connection before sending
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          sendToServer({ ...message, userId, roomCode: currentRoom });
+        } else {
+          connectToServer().then(() => {
+            sendToServer({ ...message, userId, roomCode: currentRoom });
+          });
+        }
       }
       break;
 
@@ -275,22 +341,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       break;
   }
-  return true; // Keep the message channel open
+  return true;
 });
 
 // ===== Broadcast helpers =====
 
 function broadcastToPopup(msg) {
-  chrome.runtime.sendMessage(msg).catch(() => {
-    // Popup might not be open
-  });
+  chrome.runtime.sendMessage(msg).catch(() => {});
 }
 
 function sendToContentScript(msg) {
   if (activeTabId) {
     chrome.tabs.sendMessage(activeTabId, msg).catch(() => {});
   } else {
-    // Try the active tab
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]) {
         activeTabId = tabs[0].id;
@@ -311,5 +374,12 @@ function broadcastState() {
   });
 }
 
-// ===== Initialize =====
-connectToServer();
+// ===== Initialize: load saved state and connect =====
+loadState().then(() => {
+  connectToServer().then(() => {
+    // If we had an active room, re-join it
+    if (currentRoom && userId) {
+      sendToServer({ type: MSG.JOIN_ROOM, userId, roomCode: currentRoom });
+    }
+  });
+});
