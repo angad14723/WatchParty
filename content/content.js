@@ -14,12 +14,19 @@
   let roomCode = null;
   let myUserId = null;
 
+  // ===== Debouncing & throttling =====
+  let seekDebounceTimer = null;
+  let lastSyncSent = 0;
+  const SYNC_COOLDOWN_MS = 300; // Min time between outgoing sync events
+  const SEEK_DEBOUNCE_MS = 500; // Wait for seek to settle before syncing
+  const REMOTE_ACTION_LOCK_MS = 800; // How long to suppress local events after remote action
+  const SYNC_THRESHOLD = 1.5; // Only seek if time difference > this (seconds)
+
   console.log('[WatchParty] Content script loaded on', window.location.hostname);
 
   // ===== Find the main video element =====
 
   function findVideoElement() {
-    // Try to find the largest/main video
     const videos = document.querySelectorAll('video');
     if (videos.length === 0) return null;
 
@@ -47,7 +54,6 @@
 
     if (retries <= 0) {
       console.log('[WatchParty] No video element found after retries');
-      // Set up MutationObserver as fallback
       setupVideoObserver(callback);
       return;
     }
@@ -70,6 +76,20 @@
     });
   }
 
+  // ===== Throttled send =====
+
+  function sendSyncEvent(type, data) {
+    const now = Date.now();
+    if (now - lastSyncSent < SYNC_COOLDOWN_MS) return; // Throttle
+    lastSyncSent = now;
+
+    chrome.runtime.sendMessage({
+      type,
+      ...data,
+      timestamp: now, // Include timestamp for latency compensation
+    });
+  }
+
   // ===== Hook video events =====
 
   function hookVideoEvents(video) {
@@ -83,12 +103,19 @@
 
     video.addEventListener('pause', () => {
       if (isRemoteAction || !syncEnabled) return;
+      // Ignore pause events during seeking (browsers fire pause before seeked)
+      if (video.seeking) return;
       sendSyncEvent(MSG.SYNC_PAUSE, { currentTime: video.currentTime });
     });
 
     video.addEventListener('seeked', () => {
       if (isRemoteAction || !syncEnabled) return;
-      sendSyncEvent(MSG.SYNC_SEEK, { currentTime: video.currentTime });
+
+      // Debounce seeks — users often scrub rapidly
+      clearTimeout(seekDebounceTimer);
+      seekDebounceTimer = setTimeout(() => {
+        sendSyncEvent(MSG.SYNC_SEEK, { currentTime: video.currentTime });
+      }, SEEK_DEBOUNCE_MS);
     });
 
     video.addEventListener('ratechange', () => {
@@ -97,28 +124,30 @@
     });
   }
 
-  function sendSyncEvent(type, data) {
-    chrome.runtime.sendMessage({ type, ...data });
-  }
-
   // ===== Apply remote sync actions =====
 
   function applyRemoteAction(callback) {
     isRemoteAction = true;
+    clearTimeout(seekDebounceTimer); // Cancel any pending outgoing seeks
     callback();
-    // Reset flag after a short delay to ensure event listeners don't catch it
-    setTimeout(() => { isRemoteAction = false; }, 500);
+    // Lock out local events for a bit to prevent echo loops
+    setTimeout(() => { isRemoteAction = false; }, REMOTE_ACTION_LOCK_MS);
   }
 
   function handleSyncMessage(msg) {
     if (!videoEl || !syncEnabled) return;
 
+    // Estimate one-way latency from timestamp
+    const latencyMs = msg.timestamp ? (Date.now() - msg.timestamp) / 2 : 0;
+    const latencySec = Math.max(0, Math.min(latencyMs / 1000, 5)); // Cap at 5 sec
+
     switch (msg.type) {
       case MSG.SYNC_PLAY:
         applyRemoteAction(() => {
-          // Seek to the sender's time if difference is significant
-          if (Math.abs(videoEl.currentTime - msg.currentTime) > CONFIG.SYNC_THRESHOLD_SECONDS) {
-            videoEl.currentTime = msg.currentTime;
+          // Compensate for network delay
+          const targetTime = msg.currentTime + latencySec;
+          if (Math.abs(videoEl.currentTime - targetTime) > SYNC_THRESHOLD) {
+            videoEl.currentTime = targetTime;
           }
           videoEl.play().catch(() => {});
         });
@@ -127,7 +156,7 @@
       case MSG.SYNC_PAUSE:
         applyRemoteAction(() => {
           videoEl.pause();
-          if (Math.abs(videoEl.currentTime - msg.currentTime) > CONFIG.SYNC_THRESHOLD_SECONDS) {
+          if (Math.abs(videoEl.currentTime - msg.currentTime) > SYNC_THRESHOLD) {
             videoEl.currentTime = msg.currentTime;
           }
         });
@@ -135,7 +164,9 @@
 
       case MSG.SYNC_SEEK:
         applyRemoteAction(() => {
-          videoEl.currentTime = msg.currentTime;
+          if (Math.abs(videoEl.currentTime - msg.currentTime) > 0.5) {
+            videoEl.currentTime = msg.currentTime;
+          }
         });
         break;
 
@@ -161,7 +192,6 @@
         if (!videoEl) {
           waitForVideo((video) => {
             hookVideoEvents(video);
-            // Initialize the overlay
             if (window.__watchPartyOverlay) {
               window.__watchPartyOverlay.init(myUserId);
             }
