@@ -299,11 +299,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case MSG.START_SYNC:
       syncActive = true;
       saveState();
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
         if (tabs[0]) {
           activeTabId = tabs[0].id;
           saveState();
-          sendToContentScript({ type: MSG.START_SYNC, roomCode: currentRoom, userId });
+
+          // Programmatically inject content scripts to ensure they're running
+          try {
+            await chrome.scripting.executeScript({
+              target: { tabId: activeTabId },
+              files: ['shared/constants.js', 'content/content.js', 'content/overlay.js'],
+            });
+            await chrome.scripting.insertCSS({
+              target: { tabId: activeTabId },
+              files: ['content/content.css'],
+            });
+            console.log('[WatchParty] Content scripts injected into tab', activeTabId);
+          } catch (e) {
+            console.log('[WatchParty] Script injection skipped (already injected or not allowed):', e.message);
+          }
+
+          // Small delay to let scripts initialize, then send start sync
+          setTimeout(() => {
+            sendToContentScript({ type: MSG.START_SYNC, roomCode: currentRoom, userId });
+          }, 500);
         }
       });
       break;
