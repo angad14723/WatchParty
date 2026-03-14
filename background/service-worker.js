@@ -188,6 +188,7 @@ function handleServerMessage(msg) {
     case MSG.SYNC_PAUSE:
     case MSG.SYNC_SEEK:
     case MSG.SYNC_RATE:
+    case MSG.SYNC_STATE:
       if (syncActive) {
         sendToContentScript(msg);
       }
@@ -259,6 +260,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case MSG.SYNC_PAUSE:
     case MSG.SYNC_SEEK:
     case MSG.SYNC_RATE:
+    case MSG.SYNC_STATE:
       if (syncActive && currentRoom) {
         sendToServer({ ...message, userId, roomCode: currentRoom });
       }

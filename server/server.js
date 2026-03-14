@@ -94,6 +94,7 @@ function handleMessage(ws, msg) {
     case MSG.SYNC_PAUSE:
     case MSG.SYNC_SEEK:
     case MSG.SYNC_RATE:
+    case MSG.SYNC_STATE:
       broadcastToRoom(ws, msg);
       break;
 
