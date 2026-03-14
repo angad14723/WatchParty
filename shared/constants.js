@@ -33,7 +33,7 @@ const MSG = {
 };
 
 const CONFIG = {
-  SERVER_URL: 'ws://localhost:3000',
+  SERVER_URL: 'wss://watchparty-e88y.onrender.com',
   STUN_SERVERS: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
