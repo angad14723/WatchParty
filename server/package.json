@@ -1,0 +1,13 @@
+{
+  "name": "watchparty-server",
+  "version": "1.0.0",
+  "description": "WatchParty signaling server for room management, playback sync, and WebRTC signaling",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  }
+}

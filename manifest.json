@@ -1,0 +1,57 @@
+{
+  "manifest_version": 3,
+  "name": "WatchParty",
+  "version": "1.0.0",
+  "description": "Watch movies together with friends! Synchronized playback + built-in video chat on any OTT platform.",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "tabs"
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://*.netflix.com/*",
+        "*://*.primevideo.com/*",
+        "*://*.hotstar.com/*",
+        "*://*.disneyplus.com/*",
+        "*://*.jiocinema.com/*",
+        "*://*.zee5.com/*",
+        "*://*.sonyliv.com/*",
+        "*://*.voot.com/*"
+      ],
+      "js": [
+        "shared/constants.js",
+        "content/content.js",
+        "content/overlay.js"
+      ],
+      "css": [
+        "content/content.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

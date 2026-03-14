@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WatchParty</title>
+  <link rel="stylesheet" href="popup.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app">
+    <!-- Header -->
+    <div class="header">
+      <div class="logo-row">
+        <img src="../icons/icon48.png" alt="WatchParty" class="logo-icon">
+        <h1>WatchParty</h1>
+      </div>
+      <p class="tagline">Watch together, anywhere.</p>
+    </div>
+
+    <!-- Main Screen (Create / Join) -->
+    <div id="screen-main" class="screen active">
+      <button id="btn-create" class="btn btn-primary">
+        <span class="btn-icon">🎬</span>
+        Create Party
+      </button>
+      <div class="divider">
+        <span>or</span>
+      </div>
+      <div class="join-group">
+        <input type="text" id="input-code" class="input" placeholder="Enter room code" maxlength="6" spellcheck="false" autocomplete="off">
+        <button id="btn-join" class="btn btn-secondary">Join</button>
+      </div>
+    </div>
+
+    <!-- Party Active Screen -->
+    <div id="screen-party" class="screen">
+      <div class="party-info">
+        <div class="status-badge">
+          <span class="status-dot"></span>
+          <span>Party Active</span>
+        </div>
+        <div class="room-code-display">
+          <span class="label">Room Code</span>
+          <div class="code-row">
+            <span id="display-code" class="code"></span>
+            <button id="btn-copy" class="btn-icon-only" title="Copy code">📋</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="participants-section">
+        <h3>Participants</h3>
+        <ul id="participant-list" class="participant-list"></ul>
+      </div>
+
+      <div class="party-actions">
+        <button id="btn-sync" class="btn btn-accent">
+          <span class="btn-icon">🔄</span>
+          Start Sync
+        </button>
+        <button id="btn-leave" class="btn btn-danger">
+          Leave Party
+        </button>
+      </div>
+    </div>
+
+    <!-- Connection status -->
+    <div id="connection-status" class="connection-bar disconnected">
+      <span class="conn-dot"></span>
+      <span id="conn-text">Connecting...</span>
+    </div>
+  </div>
+
+  <script src="../shared/constants.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

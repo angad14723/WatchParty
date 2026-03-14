@@ -1,0 +1,198 @@
+/* ===== WatchParty — In-Page Overlay Styles ===== */
+
+#watchparty-overlay {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 2147483647; /* Max z-index to stay on top of everything */
+  width: 320px;
+  max-height: 420px;
+  background: rgba(13, 15, 26, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(124, 77, 255, 0.2);
+  border-radius: 16px;
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.5),
+    0 0 30px rgba(124, 77, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #f0f0f5;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: wp-slideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#watchparty-overlay.wp-minimized {
+  width: 200px;
+  max-height: auto;
+}
+
+@keyframes wp-slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes wp-fadeOut {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.9); }
+}
+
+/* ===== Header ===== */
+
+.wp-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: grab;
+  user-select: none;
+}
+
+.wp-overlay-header:active {
+  cursor: grabbing;
+}
+
+.wp-overlay-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #7c4dff, #00e5c3);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.wp-logo {
+  font-size: 16px;
+  -webkit-text-fill-color: initial;
+}
+
+.wp-overlay-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.wp-ctrl-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: none;
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.wp-ctrl-btn:hover {
+  background: rgba(124, 77, 255, 0.2);
+  transform: scale(1.05);
+}
+
+.wp-ctrl-btn.wp-off {
+  background: rgba(255, 71, 87, 0.2);
+}
+
+/* ===== Video Grid ===== */
+
+.wp-video-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  padding: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.wp-video-tile {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(21, 24, 41, 0.9);
+  aspect-ratio: 4 / 3;
+  min-height: 80px;
+  animation: wp-tileIn 0.3s ease;
+}
+
+@keyframes wp-tileIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.wp-video-tile video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 10px;
+}
+
+.wp-video-label {
+  position: absolute;
+  bottom: 6px;
+  left: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 2px 8px;
+  border-radius: 6px;
+  backdrop-filter: blur(4px);
+  letter-spacing: 0.3px;
+}
+
+.wp-local .wp-video-label {
+  background: linear-gradient(135deg, rgba(124, 77, 255, 0.6), rgba(0, 229, 195, 0.6));
+}
+
+/* ===== Status Bar ===== */
+
+.wp-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 11px;
+  color: #00e5c3;
+}
+
+.wp-sync-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  animation: wp-pulse 2s infinite;
+}
+
+@keyframes wp-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* ===== Scrollbar ===== */
+
+.wp-video-grid::-webkit-scrollbar {
+  width: 3px;
+}
+
+.wp-video-grid::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.wp-video-grid::-webkit-scrollbar-thumb {
+  background: rgba(124, 77, 255, 0.3);
+  border-radius: 2px;
+}
