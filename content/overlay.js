@@ -39,6 +39,10 @@
       </div>
       <div class="wp-status-bar" id="wp-status-bar">
         <span class="wp-sync-indicator">🔄 Syncing</span>
+        <div class="wp-bar-actions">
+          <button id="wp-btn-stop-sync" class="wp-bar-btn wp-stop">⏹ Stop Sync</button>
+          <button id="wp-btn-leave" class="wp-bar-btn wp-leave">🚪 Leave</button>
+        </div>
       </div>
     `;
 
@@ -113,6 +117,19 @@
       if (statusBar) statusBar.style.display = isMinimized ? 'none' : 'flex';
       btnMinimize.textContent = isMinimized ? '🔼' : '➖';
       overlayContainer.classList.toggle('wp-minimized', isMinimized);
+    });
+
+    // Stop Sync button
+    const btnStopSync = document.getElementById('wp-btn-stop-sync');
+    btnStopSync.addEventListener('click', () => {
+      chrome.runtime.sendMessage({ type: MSG.STOP_SYNC });
+    });
+
+    // Leave Party button
+    const btnLeave = document.getElementById('wp-btn-leave');
+    btnLeave.addEventListener('click', () => {
+      chrome.runtime.sendMessage({ type: MSG.LEAVE_ROOM });
+      window.__watchPartyOverlay.destroy();
     });
   }
 

@@ -163,11 +163,12 @@
 .wp-status-bar {
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 6px 14px;
+  justify-content: space-between;
+  padding: 8px 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   font-size: 11px;
   color: #00e5c3;
+  gap: 8px;
 }
 
 .wp-sync-indicator {
@@ -175,6 +176,44 @@
   align-items: center;
   gap: 4px;
   animation: wp-pulse 2s infinite;
+  white-space: nowrap;
+}
+
+.wp-bar-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.wp-bar-btn {
+  border: none;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.wp-bar-btn.wp-stop {
+  background: rgba(255, 193, 7, 0.15);
+  color: #ffc107;
+  border: 1px solid rgba(255, 193, 7, 0.25);
+}
+
+.wp-bar-btn.wp-stop:hover {
+  background: rgba(255, 193, 7, 0.3);
+}
+
+.wp-bar-btn.wp-leave {
+  background: rgba(255, 71, 87, 0.15);
+  color: #ff4757;
+  border: 1px solid rgba(255, 71, 87, 0.25);
+}
+
+.wp-bar-btn.wp-leave:hover {
+  background: rgba(255, 71, 87, 0.3);
 }
 
 @keyframes wp-pulse {
